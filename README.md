@@ -12,28 +12,37 @@ Hızlı bir Türkçe metinden konuşmaya (TTS) modeli olan [EMA Lightning](https
 
 ## Kurulum
 
-Tk destekli Python 3.10 veya üstü gerekir.
+### Hazır uygulama: EMA GUI (Apple Silicon Mac)
+
+Python ya da başka bir şey kurmana gerek yok.
+
+1. [Releases](https://github.com/kaanklcrsln/raven/releases/latest) sayfasından `EMA-GUI-…-arm64.dmg` dosyasını indir ve aç
+2. **EMA GUI**'yi **Applications** klasörüne sürükle
+3. Uygulamayı ilk açtığında macOS, geliştiricinin doğrulanamadığını söyler, çünkü uygulama Apple imzalı değil. **Sistem Ayarları → Gizlilik ve Güvenlik** sayfasının altındaki **Yine de Aç** düğmesine bas. Bunu yalnızca bir kez yapman yeterli
+
+Bu adımın yerine Terminal'de tek bir komut da çalıştırabilirsin:
 
 ```bash
-git clone https://github.com/kaanklcrsln/raven.git
-cd raven
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+xattr -dr com.apple.quarantine "/Applications/EMA GUI.app"
 ```
 
-İlk açılışta model Hugging Face'ten iner, boyutu yaklaşık 34 MB. Modeli yerelde tutmak isterseniz `ema.pt` ve `decoder.pt` dosyalarını repo kök dizinine ya da bir `app.py` dosyasının yanına koyun. İki uygulama da modeli oradan yükler:
+Model uygulamanın içinde gelir, internet gerekmez. Uygulama yalnızca M serisi işlemcili Mac'lerde çalışır, Intel Mac'ler için aşağıdaki kaynaktan kurulumu kullan.
+
+### Kaynaktan kurulum
+
+Tk destekli Python 3.10 ya da üstü gerekir. [python.org](https://www.python.org/downloads/) yükleyicisi Tk ile gelir, Homebrew kullanıyorsan `brew install python-tk` da gerekir.
 
 ```bash
-hf download canberkkkkkk/ema-lightning ema.pt decoder.pt --local-dir .
-```
-
-NVIDIA GPU'su olmayan Mac'lerde ve diğer bilgisayarlarda model CPU'da çalışır. İlk seslendirme yavaştır çünkü model ısınır. Sonrakiler gerçek zamandan kat kat hızlıdır.
-
-## EMA GUI
-
-```bash
+git clone https://github.com/kaanklcrsln/raven.git && cd raven
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python ema-gui/app.py
 ```
+
+İlk açılışta model Hugging Face'ten iner, boyutu yaklaşık 34 MB. NVIDIA GPU'su olmayan bilgisayarlarda model CPU'da çalışır. İlk seslendirme model ısınırken yavaştır, sonrakiler gerçek zamandan kat kat hızlıdır.
+
+Uygulamayı kendin paketlemek için `sh packaging/build_dmg.sh` komutunu çalıştır. Komut `dist/` klasörüne DMG dosyasını yazar.
+
+## EMA GUI
 
 - Türkçe metni yazıp **▶ Seslendir** düğmesine ya da ⌘+Enter'a basın. Ses üretilir ve hemen çalar
 - Dalga formu oynatıcısında herhangi bir yere tıklayınca o noktaya atlar. Boşluk tuşu oynatır ya da duraklatır, Esc durdurur
@@ -41,7 +50,7 @@ NVIDIA GPU'su olmayan Mac'lerde ve diğer bilgisayarlarda model CPU'da çalış�
   - **Hız**, 0.25× ile 4× arası. Çift tıklayınca sıfırlanır
   - **Örnekleme hızı**, 8 ile 48 kHz arası
   - **Seed**, rastgele olabilir, zarla yeniden atılabilir ya da sabitlenebilir
-- Üst çubuktan seçilen dört renk teması
+- Üst çubukta Bagel Fat One ile "Raven" yazısı ve yanında "EMA Lightning"
 - Sonucu `.wav` olarak kaydetme
 
 ## EMA Island

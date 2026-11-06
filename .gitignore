@@ -21,3 +21,7 @@ MODEL_CARD.md
 # Raven Web (npm install / npm run build)
 raven-web/node_modules/
 raven-web/dist/
+
+# EMA GUI app build (packaging/build_dmg.sh)
+build/
+dist/

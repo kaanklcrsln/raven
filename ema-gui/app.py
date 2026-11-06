@@ -23,7 +23,9 @@ import numpy as np
 import sounddevice as sd
 
 HERE = Path(__file__).resolve().parent
+ROOT = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else HERE.parent  # repo root, or the .app's bundled files
 REPO_URL = "https://github.com/kaanklcrsln/raven"
+BRAND_FONT = ROOT / "Bagel_Fat_One" / "BagelFatOne-Regular.ttf"
 
 
 def blend(c1, c2, t):
@@ -44,7 +46,8 @@ LINE = blend(BG, TEXT, 0.16)
 WAVE = blend(BG, TEXT, 0.25)
 EDGE = blend(BG, TEXT, 0.20)  # glass panel border
 DANGER = "#FF8F8F"
-THEMES = {"Mavi": "#8EC5FF", "Yeşil": "#93E2B0", "Turuncu": "#FFAE85", "Mor": "#C4A7FF"}
+ACCENT = "#C4A7FF"
+BRAND = "#BAA2FB"  # Raven's lavender, the same as the mascot
 
 RATES = (8000, 16000, 24000, 48000)
 SPEED_MIN, SPEED_MAX = 0.25, 4.0
@@ -143,6 +146,27 @@ def svg_polygon(d, steps=6):
 
 
 GITHUB = svg_polygon(GITHUB_PATH)
+
+
+def register_font(path):
+    """Make a font file usable by Tk in this process only, without installing it (macOS CoreText)."""
+    if sys.platform != "darwin" or not path.exists():
+        return False
+    import ctypes
+    import ctypes.util
+
+    cf = ctypes.CDLL(ctypes.util.find_library("CoreFoundation"))
+    ct = ctypes.CDLL(ctypes.util.find_library("CoreText"))
+    cf.CFURLCreateFromFileSystemRepresentation.restype = ctypes.c_void_p
+    cf.CFURLCreateFromFileSystemRepresentation.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    ct.CTFontManagerRegisterFontsForURL.restype = ctypes.c_bool
+    ct.CTFontManagerRegisterFontsForURL.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
+    raw = str(path).encode()
+    url = cf.CFURLCreateFromFileSystemRepresentation(None, raw, len(raw), False)
+    ok = ct.CTFontManagerRegisterFontsForURL(url, 1, None)  # 1 = kCTFontManagerScopeProcess
+    cf.CFRelease(url)
+    return ok
 
 
 def pick_font(root, *names):
@@ -308,11 +332,12 @@ class App:
         self.f_xs = (fam, 10, "bold")
         self.f_text = (fam, 15)
         self.f_mono = (mono, 12)
+        self.f_brand = (pick_font(root, "Bagel Fat One", fam), 21)
 
         self.tts = self.speech = self.speech_key = self.bars = None
         self.playing = self.busy = self.seed_locked = self.settings_open = False
         self.play_t0 = self.play_off = self.progress = 0.0
-        self.speed, self.rate, self.theme = 1.0, 48000, "Turuncu"
+        self.speed, self.rate = 1.0, 48000
         self.status_text, self.status_col = "Model yükleniyor…", MUTED
         self.last_seed_id = None
         self.events = queue.Queue()
@@ -357,7 +382,7 @@ class App:
 
     @property
     def accent(self):
-        return THEMES[self.theme]
+        return ACCENT
 
     @property
     def accent2(self):
@@ -423,7 +448,7 @@ class App:
 
     # ----- layout -----
     def build(self):
-        """(Re)draw every control; called at start, on theme change and when settings open/close."""
+        """(Re)draw every control; called at start and when settings open/close."""
         self.cv.delete("ui")
         self.hits, self.hover, self.pressed, self.panels = {}, None, None, []
         self.tip.hide()
@@ -458,23 +483,15 @@ class App:
         github(MUTED)
         self.hit("gh", (gx - 14, cy - 14, gx + 14, cy + 14), click=lambda: webbrowser.open(REPO_URL),
                  enter=lambda: github(TEXT), leave=lambda: github(MUTED), tip="GitHub reposu")
-        for i, name in enumerate(THEMES):
-            self._theme_dot(name, x1 + 26 + i * 20, cy)
+        # "Raven" and "EMA Lightning" share a baseline, centred on the bar by the logo's cap height
+        brand, small = tkfont.Font(font=self.f_brand), tkfont.Font(font=self.f_s)
+        base = cy + round(brand.metrics("ascent") * 0.36)
+        x = x1 + 18
+        cv.create_text(x, base - brand.metrics("ascent"), text="Raven", anchor="nw", fill=BRAND, font=self.f_brand,
+                       tags="ui")
+        cv.create_text(x + brand.measure("Raven") + 8, base - small.metrics("ascent"), text="EMA Lightning",
+                       anchor="nw", fill=MUTED, font=self.f_s, tags="ui")
         return y2
-
-    def _theme_dot(self, name, x, y):
-        cv, tag = self.cv, f"theme{name}"
-
-        def draw(hover):
-            cv.delete(tag)
-            if name == self.theme or hover:
-                cv.create_oval(x - 9.5, y - 9.5, x + 9.5, y + 9.5, outline=TEXT if name == self.theme else MUTED,
-                               width=1.5, tags=("ui", tag))
-            cv.create_oval(x - 6, y - 6, x + 6, y + 6, fill=THEMES[name], outline="", tags=("ui", tag))
-
-        draw(False)
-        self.hit(tag, (x - 10, y - 10, x + 10, y + 10), click=lambda: self.set_theme(name),
-                 enter=lambda: draw(True), leave=lambda: draw(False))
 
     def _settings(self, x1, y1, x2):
         cv, y2 = self.cv, y1 + round(self.settings_h)
@@ -690,11 +707,6 @@ class App:
                 cv.create_line(px, y - hgt / 2, px, y + hgt / 2, fill=TEXT, tags=t)
 
     # ----- state -----
-    def set_theme(self, name):
-        if name != self.theme:
-            self.theme = name
-            self.build()
-
     def _settings_target(self):
         return 284 if self.settings_open else 48
 
@@ -801,7 +813,7 @@ class App:
 
             dev = "cuda" if torch.cuda.is_available() else "cpu"
             # local weights next to this file or in the repo root; otherwise download from the Hub
-            local = next((d for d in (HERE, HERE.parent) if (d / "ema.pt").exists() and (d / "decoder.pt").exists()),
+            local = next((d for d in (HERE, ROOT) if (d / "ema.pt").exists() and (d / "decoder.pt").exists()),
                          None)
             if local:
                 m = load_acoustic(str(local / "ema.pt"), dev)
@@ -958,6 +970,7 @@ class App:
 
 
 if __name__ == "__main__":
+    register_font(BRAND_FONT)  # before Tk starts, so it lists the family
     root = tk.Tk()
     App(root)
     root.mainloop()
